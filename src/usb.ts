@@ -11,6 +11,7 @@ export function useUsb(onFrame: (frame: Frame)=>void, onOpen: ()=>void) {
   const [status,setStatus] = useState<'disconnected'|'connecting'|'connected'|'closing'>('disconnected')
   const [error,setError] = useState('')
   const [invalid,setInvalid] = useState(0)
+  const [output,setOutput] = useState('')
   const supported = Boolean(navigator.serial)
   function stop(current: Session) {
     current.stop = true
@@ -46,7 +47,11 @@ export function useUsb(onFrame: (frame: Frame)=>void, onOpen: ()=>void) {
       onOpen()
       setStatus('connected')
       while (!current.stop && port.readable) {
-        const lines = new SerialLines(frame=>receive.current(frame),()=>setInvalid(n=>n+1))
+        const lines = new SerialLines(
+          frame=>receive.current(frame),
+          ()=>setInvalid(n=>n+1),
+          text=>setOutput(previous=>(previous+text).slice(-65_536)),
+        )
         const reader = port.readable.getReader()
         current.reader = reader
         try {
@@ -79,5 +84,5 @@ export function useUsb(onFrame: (frame: Frame)=>void, onOpen: ()=>void) {
     setStatus('closing')
     stop(session.current)
   }
-  return {status,error,invalid,supported,connect,disconnect}
+  return {status,error,invalid,supported,connect,disconnect,output,clearOutput:()=>setOutput('')}
 }

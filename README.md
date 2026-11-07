@@ -22,6 +22,10 @@ Open the printed URL in desktop Chrome. `npm run build` checks TypeScript and pr
 
 The sketch emits temperature and humidity only. The demo's distance and pump channels need separate firmware fields to show physical readings. See the [Chrome Web Serial guide](https://developer.chrome.com/docs/capabilities/serial) for browser support and permission details.
 
+## Serial Monitor
+
+After connecting USB, open **Serial Monitor** to read output from the same port. Plain text, partial prints, and JSON appear as they arrive. Use **Auto-scroll** to follow new output and **Clear output** to empty the display. The monitor is read-only. Keep each dashboard JSON sample on its own line so debug prints and telemetry can share the port.
+
 ## Add a sensor and plot it
 
 1. Open **Flow Bench** and keep Demo mode active. In **Setup**, choose **Add sensor → Custom**. Name it **Custom Flow**, name its channel **Flow**, set units to `L/min`, and choose `flow_lpm` from **Detected fields** or type it into **Serial field**. Save.

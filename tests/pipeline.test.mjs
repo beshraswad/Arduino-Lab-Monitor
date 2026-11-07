@@ -16,7 +16,7 @@ test('serial stream accepts split UTF-8 and CRLF, rejects invalid frames and rec
   lines.push(encoder.encode('a'.repeat(66_000)))
   lines.push(encoder.encode('discarded\n{"flow_lpm":3}\n{"unterminated":7}'))
   assert.deepEqual(frames, [{mode:'café',flow_lpm:2.1},{enabled:false},{flow_lpm:3}])
-  assert.equal(invalid, 6)
+  assert.equal(invalid, 4)
   new SerialLines(frame => frames.push(frame), () => invalid++).push(encoder.encode('{"flow_lpm":4}\n'))
   assert.equal(frames.at(-1).flow_lpm, 4)
 })
@@ -65,4 +65,23 @@ test('CSV retains each timestamp and sample, includes calculations and leaves ga
     '1970-01-01T00:00:01.500Z,0.500,,,8,',
     '1970-01-01T00:00:01.750Z,0.750,,,,','',
   ].join('\r\n'))
+})
+
+test('the monitor displays partial prints and mixed output while telemetry keeps parsing', () => {
+  const frames = []
+  const chunks = []
+  let invalid = 0
+  const lines = new SerialLines(frame => frames.push(frame), () => invalid++, text => chunks.push(text))
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode('Booting café')
+  lines.push(bytes.subarray(0, bytes.length - 1))
+  assert.equal(chunks.join(''), 'Booting caf')
+  lines.push(bytes.subarray(bytes.length - 1))
+  assert.equal(chunks.join(''), 'Booting café')
+  assert.deepEqual(frames, [])
+  const tail = '\r\nPump ON\r\n{"flow_lpm":2.1}\n{"broken":}\nNext reading: '
+  lines.push(encoder.encode(tail))
+  assert.equal(chunks.join(''), 'Booting café' + tail)
+  assert.deepEqual(frames, [{flow_lpm:2.1}])
+  assert.equal(invalid, 1)
 })

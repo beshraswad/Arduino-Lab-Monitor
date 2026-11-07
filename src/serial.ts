@@ -4,14 +4,18 @@ export class SerialLines {
   private pending = ''
   private dropping = false
   private decoder = new TextDecoder()
-  constructor(onFrame: (frame: Frame) => void, onInvalid: () => void) {
+  constructor(onFrame: (frame: Frame) => void, onInvalid: () => void, onText?: (text: string) => void) {
     this.onFrame = onFrame
     this.onInvalid = onInvalid
+    this.onText = onText
   }
   private onFrame: (frame: Frame) => void
   private onInvalid: () => void
+  private onText?: (text: string) => void
   push(bytes: Uint8Array) {
-    const parts = this.decoder.decode(bytes, {stream:true}).split('\n')
+    const text = this.decoder.decode(bytes, {stream:true})
+    if (text) this.onText?.(text)
+    const parts = text.split('\n')
     parts.forEach((part, i) => {
       const complete = i < parts.length-1
       if (!this.dropping) {
@@ -22,7 +26,7 @@ export class SerialLines {
         } else this.pending += part
       }
       if (!complete) return
-      if (!this.dropping && this.pending.trim()) {
+      if (!this.dropping && /^[{\[]/.test(this.pending.trimStart())) {
         let data: unknown
         try { data = JSON.parse(this.pending) } catch { this.onInvalid() }
         if (data !== undefined) {

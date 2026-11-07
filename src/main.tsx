@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, ArrowRight, ChevronDown, ChevronRight, CircuitBoard, Download, FlaskConical, Folder, Grip, Pencil, Play, Plus, Radio, Settings2, Square, Usb, Flag, Check, CircleHelp } from 'lucide-react'
+import { Activity, ArrowRight, ChevronDown, ChevronRight, CircuitBoard, Download, FlaskConical, Folder, Grip, Pencil, Play, Plus, Radio, Settings2, Square, Usb, Flag, Check, CircleHelp, Terminal, Trash2 } from 'lucide-react'
 import { channelsOf, csv, demoFrame, namedChannels, persist, projectValues, restore, TIME, uid, type Frame, type Project, type Run, type Sensor } from './model'
 import { Chart, Thumbnail } from './visuals'
 import { Modal, SensorEditor, TemplatePicker } from './editor'
 import { useUsb } from './usb'
+
 import './style.css'
 import { createRoot } from 'react-dom/client'
 
@@ -16,7 +17,7 @@ function App() {
   const [projects,setProjects] = useState(initial.projects)
   const [selected,setSelected] = useState(initial.selected)
   const project = projects.find(p=>p.id===selected)!
-  const [tab,setTab] = useState<'setup'|'live'>('setup')
+  const [tab,setTab] = useState<'setup'|'live'|'serial'>('setup')
   const [usingDemo,setUsingDemo] = useState(true)
   const [baud,setBaud] = useState(115200)
   const [raw,setRaw] = useState<RawSample[]>([])
@@ -32,6 +33,8 @@ function App() {
   const [draftSensor,setDraftSensor] = useState<Sensor>()
   const [saveError,setSaveError] = useState('')
   const [usbExpanded,setUsbExpanded] = useState(true)
+  const [autoScroll,setAutoScroll] = useState(true)
+  const serialOutput = useRef<HTMLPreElement>(null)
   const selectedRef = useRef(selected)
   selectedRef.current = selected
   const demoRef = useRef(false)
@@ -59,6 +62,10 @@ function App() {
     setUsingDemo(false)
     resetFeed()
   })
+  useEffect(()=>{
+    const log = serialOutput.current
+    if (tab==='serial' && autoScroll && log) log.scrollTop=log.scrollHeight
+  },[tab,autoScroll,usb.output])
   const demo=usingDemo?project.demo:undefined
   demoRef.current=!!demo
   useEffect(()=>{
@@ -171,7 +178,7 @@ function App() {
             <button className="button usb-button" disabled={!usb.supported||usb.status==='connecting'||usb.status==='closing'} onClick={()=>usb.status==='connected'?usb.disconnect():void usb.connect(baud)}><Usb size={15}/>{usb.status==='connected'?'Disconnect':'Connect USB'}</button>
             {!usb.supported&&<p className="muted usb-help">Open localhost in desktop Chrome for USB.</p>}
             {usb.error&&<p className="error usb-help" role="status">{usb.error}</p>}
-            {usb.invalid>0&&<p className="muted usb-help">{usb.invalid} invalid serial lines or read errors</p>}
+            {usb.invalid>0&&<p className="muted usb-help">{usb.invalid} telemetry parse or serial read errors</p>}
           </>}
         </div>
         <div className="side-foot"><CircleHelp size={14}/> Local workspace <span>v1.0</span></div>
@@ -187,6 +194,7 @@ function App() {
         <div className="tabs" aria-label="Project views">
           <button className={tab==='setup'?'current':''} aria-pressed={tab==='setup'} onClick={()=>setTab('setup')}><Settings2 size={17}/> Setup</button>
           <button className={tab==='live'?'current':''} aria-pressed={tab==='live'} onClick={()=>setTab('live')}><Activity size={17}/> Live View</button>
+          <button className={tab==='serial'?'current':''} aria-pressed={tab==='serial'} onClick={()=>setTab('serial')}><Terminal size={17}/> Serial Monitor</button>
           <span className={'feed-state '+feedState.toLowerCase()}><i/>{demo&&feedState==='Live'?'Demo feed active':feedState}</span>
         </div>
         {tab==='setup'?<div className="setup-grid">
@@ -199,7 +207,7 @@ function App() {
             <Chart project={project} samples={samples} markers={[]} start={origin} compact/>
             <button className="preview-link" onClick={()=>setTab('live')}><span><Activity size={17}/> Open Live View</span><ArrowRight size={17}/></button>
           </div>
-        </div>:<div className="live-stack">
+        </div>:tab==='live'?<div className="live-stack">
           <section className="panel readings-panel"><div className="panel-heading"><div><h2>Sensor readings</h2><p>Latest values for this project.</p></div><span className="tag">{demo?'Simulated data':'USB serial'}</span></div>
             <div className="readings-grid">{project.sensors.map(s=><article className="reading" key={s.id}><div className="reading-heading"><Thumbnail sensor={s}/><div><h3>{s.name}</h3><p>{s.location||'No location set'}</p></div></div>
               {s.channels.map(c=>{const reading=showValue(c.id);return <div className="reading-channel" key={c.id}><div><small>{c.name}{c.calc?' · Calculated':''}</small><strong>{reading.value} <small>{c.unit}</small></strong></div><span className={'feed-state '+reading.state.toLowerCase()}><i/>{reading.state}</span></div>})}
@@ -213,7 +221,12 @@ function App() {
               {!!run.markers.length&&<ul className="markers">{run.markers.map((m,i)=><li key={i}><Flag size={13}/><time dateTime={new Date(m.at).toISOString()}>{clock(m.at)}</time><span>{m.name}</span></li>)}</ul>}
             </>}
           </section>
-        </div>}
+        </div>:<section className="panel serial-panel" aria-label="Serial Monitor">
+          <div className="panel-heading"><div><h2>Serial Monitor</h2><p>Read incoming USB output from Serial.print() and Serial.println().</p></div><span className="tag">{usb.status==='connected'?baud+' baud':'USB disconnected'}</span></div>
+          <div className="serial-controls"><label><input type="checkbox" checked={autoScroll} onChange={e=>setAutoScroll(e.target.checked)}/> Auto-scroll</label><button className="button" disabled={!usb.output} onClick={usb.clearOutput}><Trash2 size={14}/> Clear output</button></div>
+          <pre ref={serialOutput} className="serial-output" tabIndex={0} aria-label="Incoming serial output">{usb.output || (usb.status==='connected'?'Waiting for serial output…':'Connect USB to view incoming serial output.')}</pre>
+          <p className="serial-hint">Shows the latest 65,536 characters. JSON telemetry also feeds the dashboard.</p>
+        </section>}
         <footer className="main-footer"><span><CircuitBoard size={14}/> Arduino Lab Monitor</span><span>READ-ONLY TELEMETRY</span></footer>
       </div>
     </main>
